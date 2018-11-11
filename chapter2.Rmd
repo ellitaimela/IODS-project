@@ -1,7 +1,129 @@
-# Insert chapter 2 title here
+# RStudio Exercise 2: Regression Analysis on Students' Learning Data 
 
-*Describe the work you have done this week and summarize your learning.*
+The data analysis exercise for the second course week consisted of analysing students' learning data from the course Introduction to Social Statistics, collected during December 2014 and January 2015. The exercise consisted of reading and exploring the structure of a dataset provided, showing a graphical overview and summaries of the data, and finally creating and analysing a regression model from the data. 
 
-- Describe your work and results clearly. 
-- Assume the reader has an introductory course level understanding of writing and reading R code as well as statistical methods
-- Assume the reader has no previous knowledge of your data or the more advanced methods you are using  
+1. Reading and exploring the data
+
+I retrieved the data provided for this exercise from AWS. The data, formatted in a .txt file, contained data of students' learning outcomes in the course Introduction to Social Statistics held in fall 2014. The data included 166 observations of 7 variables. The variables represented the students' gender, age, and attitude towards the course, and the students' success in exam/exercise questions related to deep learning, strategic learning, and surface learning, and the granted for the students. 
+
+```{r}
+# Reading the data
+lrn14 <- read.table("http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/learning2014.txt", 
+                    sep=",", header=TRUE)
+# The data includes students' learning data from the course Introduction to Social Statistics, 
+# collected during 3.12.2014 - 10.1.2015
+
+# Exploring the structure and dimensions of the data; 166 observations, of 7 variables
+str(lrn14)
+dim(lrn14)
+
+# Summaries of the variables
+summary(lrn14)
+```
+
+2. Creating a graphical overview of the data
+
+I created a graphical overview of the distribution of the variables and their relationships. First, I started with boxplotting the whole dataset to see and compare the distributions of the variables. Second, I created a relationship plot matrix with ggpairs to see the overall picture of the relationships between variables. After this, I examined the distributions of variables in more detail. I showed the distribution of students by gender with a barplot, and for the rest of the variables, I examined the distributions with histograms. I also analyzed the relationships of the variables with qplots and plots. 
+
+```{r}
+library(ggplot2)
+library(GGally)
+
+# Plotting the distributions of the variables
+boxplot(lrn14)
+
+# Creating a plot matrix with ggpairs
+ggpairs(lrn14, lower = list(combo = wrap("facethist", bins = 20)))
+
+# 110 females, 56 males
+barplot(table(lrn14$gender))
+
+# Age distribution from 17 to 55, median 22, mean 25.51, standard deviation 7.766078
+hist(lrn14$age)
+
+# Attitude from 1 to 5, median 3.2, mean 3.14, standard deviation 0.5327656
+hist(lrn14$attitude)
+
+# Points of deep learning questions from 1 to 5, median 3.667, mean 3.680, sd 0.5541369
+hist(lrn14$deep)
+
+# Points of strategic learning questions from 1 to 5, median 3.188, mean 3.121, sd 0.7718318
+hist(lrn14$stra)
+
+# Points of surface learning questions from 1 to 5, median 2.833, mean 2.787, sd 0.5288405
+hist(lrn14$surf)
+
+# Points granted altogether from 7 to 33, median 23.00, mean 22.72, sd 5.894884
+hist(lrn14$points)
+
+# A positive colleration between attitude and points can be found
+qplot(attitude, points, data = lrn14) + geom_smooth(method = "lm")
+qplot(age, points, data = lrn14) + geom_smooth(method = "lm")
+qplot(surf, points, data = lrn14) + geom_smooth(method = "lm")
+
+# There is no correlation between age and attitude
+qplot(age, attitude, data = lrn14) + geom_smooth(method = "lm")
+
+# The correlation between age to points achieved in strategic and deep questions looks minimal
+qplot(age, stra, data = lrn14) + geom_smooth(method = "lm")
+qplot(age, deep, data = lrn14) + geom_smooth(method = "lm")
+# There can be seen some negative correlation between age and points achieved in surface questions - statistical significance not analyzed
+qplot(age, surf, data = lrn14) + geom_smooth(method = "lm")
+
+# On average, men achieved marginally higher points compared to women - statistical significance not analyzed
+plot(lrn14$points ~ lrn14$gender)
+
+# On average, women achieved higher points in strategic and surface learning questions - statistical significance not analyzed
+plot(lrn14$stra ~ lrn14$gender)
+plot(lrn14$deep ~ lrn14$gender)
+plot(lrn14$surf ~ lrn14$gender)
+```
+
+3. Creating a regression model
+
+I started building the regression model by choosing three variables - attitude, stra, and surf - as explanatory variables and fitting a regression model where exam points was the dependent variable. I chose the variables because they had the hichest correlation with points, as could be seen in the ggpairs matrix. 
+
+```{r}
+# Fitting a linear model
+model1 <- lm(points ~ attitude + stra + surf, data = lrn14)
+summary(model1)
+```
+
+Of the explanatory variables, only attitude turned out statistically significant, its p-value being 1.93e-08. The p-values of stra and surf were not statistically significant, so I excluded them from the further analysis. I eventually tested combinations of all variables in the dataset, but I found no other statistically significant explanatory variable than attitude. Therefore, I created a new regression model with attitude as the only explanatory variable. Statistically significant (p<0.0001) estimates for both the intercept and attitude were found. 
+
+```{r}
+# Fitting a new model with attitude as the only explanatory variable
+model2 <- lm(points ~ attitude, data = lrn14)
+summary(model2)
+```
+
+4. Relationship between variables and goodness of fit
+
+As can be seen in the summary of the regression model above (model2), exam points are positively correlated with the one's attitude. This is intuitional, because a high (positive) attitude towards a specific topic typically equals a higher interest and motivation to learn, which typically leads one to investing more time and effort to the topic. OF the summary, we can see that one increase in attitude (scale from 1 to 5) increases points by 3.5255 on average. 
+
+The residual sum of squares (multiple R-squred) represents how close the data is to the fitted regression line of the model. R-squared achieves values from 0 to 100 % (or 1), which describes the percentage of the target variable variation that can be explained by the model. Multiple R-squared of model2 is 0.1906, which means that a minor part of the data lies close to the regression line.  
+
+5. Validity of assumptions of the model
+
+One natural assumption of the linear regression model created above is linearity. Another assumption related to linear regression models is that errors are normally distributed, they are not correlated, and have a constant variance. To analyze whether these assumptions are actually valid, we can take a closer look at the residuals of the model. 
+
+The normality of the errors can be analyzed with the Q-Q plot. As can be seen, a clear majority of the residuals follow the line. Only the residuals at very low and very high values deviate from the line. Therefore we can assume the error terms mostly to be normally distributed. 
+
+By plotting the residuals towards the fitted values of the model, we can see if there is any pattern that tells how the residuals change and deduce whether the variance of the residuals is constant. As we look at the Residuals vs. Fitted plot below, there does not seem to be a clear pattern. Therefore we can consider the assumption of a constant variance somewhat valid. 
+
+By examining the Residuals vs. Leverage plot below, we can also analyze the impact of single observations on the model. As we can see, no single observation stands out clearly, and the value of the leverages of all observations are low. Therefore we can reason that the impact of single observations on the model is not too high. 
+
+```{r}
+par(mfrow = c(2,2))
+
+# Visualizing Residuals vs. Fitted values
+plot(model2, which = 1)
+
+# Visualizing a normal QQ-plot
+plot(model2, which = 2)
+
+# Visualizing Residuals vs. Leverage
+plot(model2, which = 5)
+```
+
+
