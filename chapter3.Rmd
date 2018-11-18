@@ -1,0 +1,168 @@
+# RStudio Exercise 3: Logistic Regression 
+
+The data analysis exercise for the third course week consisted of analysing the relationship between students' alcohol consumption and learning outcomes. 
+
+1. Creating the markdown file
+
+A new markdown file 'chapter3.Rmd' was created and included as a child file in the 'index.Rmd' file. 
+
+2. Reading and exploring the data
+
+I read the data formulated in the Data Wrangling part of this week's exercise, and checked the structure, dimensions and summary of the dataset. The data describes student achievement in secondary education at two Portuguese schools. The data attributes included student grades, demographic, social and school related features, and it was collected by using school reports and questionnaires. Two datasets were provided regarding the performance in two distinct subjects: Mathematics (mat) and Portuguese language (por). 
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(tidyr)
+
+# Setting the working directory
+setwd("/Users/ellitaimela/Documents/Github/IODS-project/Data")
+# Reading the data
+alc <- read.csv("alc.csv", sep=",")
+# This data approach student achievement in secondary education of two Portuguese schools. 
+# The data attributes include student grades, demographic, social and school related features) 
+# and it was collected by using school reports and questionnaires. Two datasets are provided 
+# regarding the performance in two distinct subjects: Mathematics (mat) and Portuguese language (por).
+
+# Checking the data, and the structure, dimensions and summary of the dataset
+# alc
+str(alc)
+dim(alc)
+summary(alc)
+```
+
+3. Hypothesis of the relationships between high/low alcohol consumption and other variables
+
+I chose 4 variables to study their relationships with the variables and high/low alcohol consumption. 
+The variables I chose were famrel (quality of family relationships), goout (going out with friends), absences (number of school absences), and G3 (final grade). 
+According to my initial hypothesis, students who have worse relationships with their family tend to feel worse and consume more alcohol. 
+I also hypothesized that going out with friends and the number of school absences positively correlate with alcohol consumption, and the final grade negatively correlates with alcohol consumption. 
+
+4. Variables' relationships with alcohol consumption
+
+I draw boxplots of the chosen variables distributions with division to high and low alcohol consumption. 
+As can be seen, the results are in line with my initial hypotheses. The average grades are higher with students that consume less alcohol, and students who have better relationships with their family members consume less alcohol. Students who go out with friends more or have more absences also consume more alcohol. The numerical differences of the means of the variables can also be seen below. However, the statistical signifigance cannot be deduced from these results.  
+
+```{r}
+# initialize a plot of high_use and family relationships
+g1 <- ggplot(alc, aes(x = high_use, y = famrel))
+
+# define the plot as a boxplot and draw it
+g1 + geom_boxplot() + ylab("sex")
+
+# initialize a plot of high_use and going out
+g2 <- ggplot(alc, aes(x = high_use, y = goout))
+
+# define the plot as a boxplot and draw it
+g2 + geom_boxplot() + ylab("going out")
+
+# initialize a plot of high_use and absences
+g3 <- ggplot(alc, aes(x = high_use, y = absences))
+
+# define the plot as a boxplot and draw it
+g3 + geom_boxplot() + ylab("absences")
+
+# initialize a plot of high_use and G3
+g4 <- ggplot(alc, aes(x = high_use, y = G3))
+
+# define the plot as a boxplot and draw it
+g4 + geom_boxplot() + ylab("grade")
+
+# produce summary statistics by group
+alc %>% group_by(high_use) %>% summarise(count = n(), famrel = mean(famrel), goout = mean(goout), absences = mean(absences), mean_grade = mean(G3))
+```
+
+5. Using logistic regression
+
+I created a logistic regression model m with the boolean variable high_use as the target variable. High_use returns true if a student consumes alcohol highly. The explaining variables are the previously chosen variables: famrel, goout, absences, and G3. According to the results (see the output of summary(m)), going out and the number of absences positively correlate with high alcohol consumption very significantly (p<0.001). Family relationships (1 = bad, 5 = good) are negatively correlated with alcohol consumption (p<0.05). The relationship between alcohol consumption and the final grade G3 was not statistically significant (p = 0.24). 
+
+I combined and printed out the odds ratios and their confidence intervals. As can be seen from the print below, the predictor goout has the widest confidence interval. The interval of G3 is contains the value 1, with an odd ratio of 0.95 - therefore it is hard to determine if G3 is positively or negatively associated with high_use. The odd ratios and confidence intervals tell that goout is (positively) associated with high_use the most. Famrel is negatively associated with high_use (the whole confidence interval <1). Absences are positively associated with high_use, but only a littse, since the confidence interval stands between 1.032 and 1.125. 
+
+
+```{r}
+# find the model with glm()
+m <- glm(high_use ~ famrel + goout + absences + G3, data = alc, family = "binomial")
+
+# print out a summary of the model
+summary(m)
+
+# print out the coefficients of the model
+coef(m)
+
+# compute odds ratios (OR)
+OR <- coef(m) %>% exp
+
+# compute confidence intervals (CI)
+CI <- exp(confint(m))
+
+# print out the odds ratios with their confidence intervals
+cbind(OR, CI)
+```
+
+6. Predictive power of the model
+
+I refined my model and excluded the final grade G3 from it because the relationship with alcohol consumption was not statistically significant. 
+
+As can be see below from the 2x2 cross tabulation, 69 of (244 + 69 =) 313 students who were predicted as not low users were actually high users of alcohol. 24 of (24 + 45 =) 69 students who were predicted as high users were actually low users. Therefore (69+24)/(313+69) = 0.243455 = 24.3 percent of the individuals were classified inaccurately. The same results can be achieved by building a similar loss function as in the DataCamp exercise. 
+As can be seen, the prediction power is not perfect but it is higher compared to a simple, totally random guessing strategy where the probability of guessing righ from two options would be only 50 percent. 
+
+
+```{r}
+# find the model with glm()
+m2 <- glm(high_use ~ famrel + goout + absences, data = alc, family = "binomial")
+
+# print out a summary of the model
+summary(m2)
+
+# print out the coefficients of the model
+coef(m2)
+
+# predict() the probability of high_use
+probabilities <- predict(m2, type = "response")
+
+# add the predicted probabilities to 'alc'
+alc <- mutate(alc, probability = probabilities)
+
+# use the probabilities to make a prediction of high_use
+alc <- mutate(alc, prediction = probability > 0.5)
+
+# tabulate the target variable versus the predictions
+table(high_use = alc$high_use, prediction = alc$prediction)
+
+# initialize a plot of 'high_use' versus 'probability' in 'alc'
+g <- ggplot(alc, aes(x = probability, y = high_use, col = prediction))
+
+# define the geom as points and draw the plot
+g + geom_point()
+
+# tabulate the target variable versus the predictions
+table(high_use = alc$high_use, prediction = alc$prediction) %>% prop.table %>% addmargins
+
+# define a loss function (average prediction error)
+loss_func <- function(class, prob) {
+  n_wrong <- abs(class - prob) > 0.5
+  mean(n_wrong)
+}
+
+# compute the average number of wrong predictions in the (training) data
+loss_func(alc$high_use, alc$probability)
+```
+
+7. Cross-validation 
+
+According to a 10-fold cross-validation of the model m2, the prediction error with the test set gets values of around 0.23 to 0.25, which are smaller than the error of the model introduced in DataCamp (circa 0.26 error). The code and results can be seen below. 
+
+```{r}
+library(boot)
+
+# K-fold cross-validation
+cv <- cv.glm(data = alc, cost = loss_func, glmfit = m2, K = 10)
+
+# average number of wrong predictions in the cross validation
+cv$delta[1]
+```
+
+
+
