@@ -1,0 +1,180 @@
+# RStudio Exercise 4: Clustering and classification 
+
+The data analysis exercise for the third course week consisted of analysing the relationship between xxxx. 
+
+1. Creating the markdown file
+
+A new markdown file 'chapter4.Rmd' was created and included as a child file in the 'index.Rmd' file. 
+
+2. Loading and exploring the data
+
+I read the Boston data that includes housing values in the suburbs of Boston. Columns include data of for example per capita crime rate, proportion of non-retail business acres, and weighted mean of distances to five Boston employment centres by town. The dimensions of the data are 506 x 14. 
+
+
+```{r}
+library(MASS)
+library(GGally)
+library(tidyverse)
+library(corrplot)
+library(dplyr)
+
+# Loading the data
+data(Boston)
+
+# Checking the data, and the structure, dimensions and summary of the dataset
+head(Boston)
+str(Boston)
+dim(Boston)
+```
+
+3. Graphical overview of the data
+
+I the graphical overview of the data. 
+As can be seen from the ggpairs matrix and the summary statistics, the distributions vary between the variables. Crim, for example, can be considered a Poisson distribution, and rm a normal distribution. Many of the distributions are left- or right-taled. 
+
+The correlations between variables seem logical. For example crime rates, industrial areas closeby, nitrogen oxides concentration, the high age of the buildings, the accessibility to radial highways, the property tax rate, the pupil-teacher ratio, and the lower status of the population negatively correlate with the median value of occupied homes within a town. The Charles River dummy variable has the smallest absolute correlation among other variables. 
+
+```{r}
+# Graphical overview of the data
+#pairs(Boston)
+#ggpairs(Boston, lower = list(combo = wrap("facethist", bins = 20)))
+
+# calculate the correlation matrix and round it
+cor_matrix<-cor(Boston) %>% round(2)
+
+# print the correlation matrix
+cor_matrix
+
+# visualize the correlation matrix
+corrplot(cor_matrix, method="circle", type = "upper", cl.pos = "b", tl.pos = "d", tl.cex = 0.6)
+
+# Summaries of the variables
+summary(Boston)
+```
+
+4. Standardization of the dataset
+
+I standardized the dataset with the scale-function. The data changed such that the median value of each variable returns 0, and the scaled values have the same variance and form of distribution than the original dataset. 
+I also created a categorical variable of the crime rate in the Boston dataset from the scaled crime rate. I used the quantiles as the break points in the catgorical variable. The old crime rate variable was then dropped from the dataset. Then I divided the dataset to train and test sets so that 80 percent of the data belonged to the train set and 20 percent to the test set. 
+
+```{r}
+boston_scaled <- scale(Boston)
+
+# change the object to data frame
+boston_scaled <- as.data.frame(boston_scaled)
+
+# summary of the scaled dataset
+summary(boston_scaled)
+
+# summary of the scaled crime rate
+summary(boston_scaled$crim)
+
+bins <- quantile(boston_scaled$crim)
+bins
+
+label_vector <- c("low", "med_low", "med_high", "high")
+
+# create a categorical variable 'crime'
+crime <- cut(boston_scaled$crim, breaks = bins, include.lowest = TRUE, labels = label_vector) 
+
+# look at the table of the new factor crime
+table(crime)
+
+
+#remove the origical crime rate crim and add crime
+boston_scaled <- subset(boston_scaled, select = -c(crim))
+boston_scaled$crime <- crime
+str(boston_scaled)
+# number of rows in the Boston dataset 
+n <- nrow(boston_scaled)
+
+# choose randomly 80% of the rows
+ind <- sample(n,  size = n * 0.8)
+
+# create train set
+train <- boston_scaled[ind,]
+
+# create test set 
+test <- boston_scaled[-ind,]
+
+
+```
+
+5. Linear discriminant analysis
+
+I fit the Linear Discriminant Analysis on the train set. I used the categorical crime rate as the target variable and all the other variables in the dataset as predictor variables. After this, I drew the LDA plot.
+ 
+
+```{r}
+# linear discriminant analysis
+lda.fit <- lda(crime ~ ., data = train)
+
+# print the lda.fit object
+lda.fit
+
+# the function for lda biplot arrows
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+
+# target classes as numeric
+classes <- as.numeric(train$crime)
+
+# plot the lda results
+plot(lda.fit, dimen=2, col=classes, pch=classes)
+lda.arrows(lda.fit, myscale = 2)
+```
+
+6. Linear discriminant analysis
+
+I saved the crime categories from the test set and removed the categorical crime variable from the test dataset. After this, I predicted the classes with the LDA model on the test data. When cross-tabulating the results with the crime categories from the test set, you can see that the model is more capable in predicting high crime rates compared to low crime rates.  
+
+
+```{r}
+# save the correct classes from test data
+correct_classes <- test$crime
+
+test <- subset(test, select = -c(crime))
+
+# predict classes with test data
+lda.pred <- predict(lda.fit, newdata = test)
+str(lda.pred)
+# cross tabulate the results
+table(correct = correct_classes, predicted = lda.pred$class)
+```
+
+7. K-means algorithm
+
+I reloaded the Boston dataset, standardized the dataset, calculated the distances between the observations, and ran the k-means algorithm on the dataset. The optimal number of clusters turned out to be X. 
+When visualizing the clusters with pairs, you can see that xxx. 
+
+```{r}
+# load MASS and Boston
+library(MASS)
+data('Boston')
+
+boston_scaled.new <- scale(Boston)
+
+# euclidean distance matrix
+dist_eu <- dist(boston_scaled.new)
+
+# look at the summary of the distances
+summary(dist_eu)
+
+# manhattan distance matrix
+dist_man <- dist(boston_scaled.new, method="manhattan")
+
+# look at the summary of the distances
+summary(dist_man)
+
+# k-means clustering
+km <-kmeans(Boston, centers = 4)
+
+# plot the Boston dataset with clusters
+pairs(Boston[1:2], col = km$cluster)
+```
