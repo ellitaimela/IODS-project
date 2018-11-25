@@ -1,6 +1,6 @@
 # RStudio Exercise 4: Clustering and classification 
 
-The data analysis exercise for the third course week consisted of analysing the relationship between xxxx. 
+The data analysis exercise for the third course week consisted of analysing crime rates in the suburbs of Boston.  
 
 1. Creating the markdown file
 
@@ -36,8 +36,8 @@ The correlations between variables seem logical. For example crime rates, indust
 
 ```{r}
 # Graphical overview of the data
-#pairs(Boston)
-#ggpairs(Boston, lower = list(combo = wrap("facethist", bins = 20)))
+pairs(Boston)
+ggpairs(Boston, lower = list(combo = wrap("facethist", bins = 20)))
 
 # calculate the correlation matrix and round it
 cor_matrix<-cor(Boston) %>% round(2)
