@@ -15,7 +15,7 @@ library(ggplot2)
 library(GGally)
 library(tidyr)
 
-install.packages("tidyr")
+# install.packages("tidyr")
 
 # ---- 2 -----
 

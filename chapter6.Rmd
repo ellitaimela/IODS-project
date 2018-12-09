@@ -1,0 +1,229 @@
+# RStudio Exercise 6: Analysis of longitudinal data
+
+At the final week we analysed longitudinal data. We started with graphical displays and the summary method approach, and continued with linear mixed effects models for normal response variables. 
+
+Data Wrangling
+
+The code for data wrangling can be found at my Github repository. 
+The code without prints or graphs is implemented below to enable further analysis. 
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(GGally)
+library(lme4)
+
+BPRS <- read.table("https://raw.githubusercontent.com/KimmoVehkalahti/MABS/master/Examples/data/BPRS.txt", 
+                 sep=" ", header=TRUE)
+
+rats <- read.table("https://raw.githubusercontent.com/KimmoVehkalahti/MABS/master/Examples/data/rats.txt", 
+                 sep="\t", header=TRUE)
+
+# Factor treatment & subject
+BPRS$treatment <- factor(BPRS$treatment)
+BPRS$subject <- factor(BPRS$subject)
+
+rats$ID <- factor(rats$ID)
+rats$Group <- factor(rats$Group)
+
+# Convert to long form
+BPRSL <-  BPRS %>% gather(key = weeks, value = bprs, -treatment, -subject)
+# Extract the week number
+BPRSL <-  BPRSL %>% mutate(week = as.integer(substr(weeks, 5, 5)))
+
+
+# Convert to long form
+ratsl <-  rats %>% gather(key = WDs, value = weight, -ID, -Group)
+# Extract the wd
+ratsl <-  ratsl %>% mutate(WD = as.integer(substr(WDs, 3, 4)))
+
+```
+
+
+Part I: Graphical Displays and Summary Method Approach
+
+The data included observations of 16 subjects (rats) that were divided into 3 groups. 
+When analysing the data in the long form, we can analyse the individual response profiles by treatment group by building a ggplot that visualizes the responses of the individual subjects accross time. We can see that the rats in the Group 1 (n=8) have lower weights compared to Groups 2 (n=4) and 3 (n=4). The weights of the rats at Group 2 have the highest variance: one rat has significantly higher weight than the others. 
+
+```{r}
+ratsl
+dim(rats)
+summary(rats)
+dim(ratsl)
+names(ratsl)
+str(ratsl)
+summary(ratsl)
+
+ggplot(ratsl, aes(x = WD, y = weight, linetype = ID)) + geom_line() +
+  scale_linetype_manual(values = rep(1:10, times = 4)) + facet_grid(.~Group, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(ratsl$weight), max(ratsl$weight)))
+
+```
+
+We can take tracking into account when we standardize the data and plot the standardized responses. Standardization makes comparind individuals in the same groups and between groups more applicable. We can see from the plot below that the same individuals stand out as previously. 
+
+The individuals in Group 1 seem to gain weight quite steeply compared to at least Group 2. One individual whose weight dramatically drops in the beginning can be pointed out. 
+
+The individuals in Group 2 are not gaining weight as much compared to other groups. However, the growth is steadier. 
+
+The individuals in Group 3 are gaining weight more than Group 2 and more steadily than individuals in Group 1. All individuals in this group gain weight. 
+
+```{r}
+# Standardized BPRS plots by groups
+ratsl <- ratsl %>% group_by(Group) %>% mutate(weights_standardized = (weight - mean(weight))/sd(weight)) %>% ungroup()
+
+ggplot(ratsl, aes(x = WD, y = weights_standardized, linetype = ID)) + geom_line() +
+  scale_linetype_manual(values = rep(1:10, times = 4)) + facet_grid(. ~ Group, labeller = label_both) +
+  scale_y_continuous(name = "standardized bprs")
+```
+
+Next we will analyse the average response profiles of each group of individuals. In the plot below, the standard error mean acts as an indicator of variance. We can see that the curves or their variances do not overlap. The mean starting weights of the groups were different, Groups 2 and 3 more closer to each other as mentioned before. As said before, Group 2 has the highest variance. Group 1 seems to have the smallest variance. The average weight of the individuals in a group grew the most in Group 2. 
+
+
+```{r}
+# Summary measure analysis of longitudinal data
+n <- ratsl$WD %>% unique() %>% length()
+ratss <- ratsl %>% group_by(Group, WD) %>% summarise( mean = mean(weight), se = sd(weight)/sqrt(n)) %>% ungroup()
+
+# glimpse(ratss)
+
+# Plot the mean profiles
+ggplot(ratss, aes(x = WD, y = mean, linetype = Group, shape = Group)) +
+  geom_line() +
+  scale_linetype_manual(values = c(1,2,3)) +
+  geom_point(size=3) +
+  scale_shape_manual(values = c(1,2,3)) +
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se, linetype="1"), width=0.3) +
+  theme(legend.position = c(0.8,0.8)) +
+  scale_y_continuous(name = "mean(weight) +/- se(weight)")
+```
+
+We can also compare the avarage weights of the groups by boxplotting the data as below. The first-day respose/observation was removed from the data. We can see similar results from the boxplots as discussed above. However, now we can see more clearly that some outliers exist in each group. 
+
+```{r}
+# Create a summary data by treatment and subject with mean as the summary variable.
+ratsl8s <- ratsl %>%
+  filter(WD > 1) %>%
+  group_by(Group, ID) %>%
+  summarise( mean=mean(weight)) %>%
+  ungroup()
+
+# Glimpse the data
+# glimpse(ratsl8s)
+
+# Draw a boxplot of the mean versus group
+ggplot(ratsl8s, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "mean(weight), time 0-60")
+
+```
+
+When we filter the outliers, we can see that the variance decreass in each group. For Group 1, the mean grows a bit (from around 265 to 275). For Group 2, the mean decreases from around 490 to 450. For Group 3, the mean increases from around 530 to 540. Now we can see more clearly that the weights of the individuals in Groups 2 and 3 are on different levels. 
+
+
+```{r}
+# Filtering the outliers
+ratsl8s_1 <- ratsl8s %>% filter(Group == 3)
+ratsl8s_1 <- ratsl8s_1 %>% filter(mean > 500)
+ratsl8s_2 <- ratsl8s %>% filter(Group !=3)
+ratsl8s_2 <- ratsl8s_2 %>% filter(mean>250) %>% filter(mean < 500)
+ratsl8s_filtered <- rbind(ratsl8s_2, ratsl8s_1)
+
+ggplot(ratsl8s_filtered, aes(x = Group, y = mean)) +
+  geom_boxplot() +
+  stat_summary(fun.y = "mean", geom = "point", shape=23, size=4, fill = "white") +
+  scale_y_continuous(name = "mean(weight), whole study period")
+```
+
+
+To analyse differences between the Groups in more detail, we perform a simple 2-sided t-test. We will perform the t-test with 3 different pairs of Groups because the test can handle only 2 groups at a time. 
+
+We can see that the Group 1 and Group2, as well as Group 1 and Group 3, distinguish from each other. The p-values return values between the level of significance. However, the p-value of testing the difference between the Groups 2 and 3 does not include to the significant level (p = 0.3263). Therefore we can conclude that the individuals in groups 2 and 3 can be considered representing the same type of individuals (when having weight as the measure). 
+
+
+```{r}
+ratsl8s12 <- ratsl8s %>% filter(Group != 3)
+t.test(mean ~ Group, data = ratsl8s12, var.equal = TRUE)
+
+ratsl8s23 <- ratsl8s %>% filter(Group != 1)
+t.test(mean ~ Group, data = ratsl8s23, var.equal = TRUE)
+
+ratsl8s13 <- ratsl8s %>% filter(Group != 2)
+t.test(mean ~ Group, data = ratsl8s13, var.equal = TRUE)
+```
+
+
+Part II: Linear Mixed Effects Models for Normal Response Variables
+
+Now we move our focus to the BPRS data. There are 40 individuals that have been randomized to a treatment Group 1 (n=20) and Treatment Group 2 (n=20). We observe the individuals' change in the bprs value for 8 weeks. 
+
+```{r}
+BPRS
+dim(BPRS)
+summary(BPRS)
+dim(BPRSL)
+names(BPRSL)
+str(BPRSL)
+summary(BPRSL)
+glimpse(BPRSL)
+```
+
+
+We first take a look at the data by plotting the bprs values against weeks for the data. We do not draw the lines but identify the group to which each observation belongs. We can see that the individuals who point out with the highest values belong to the Group 2 almost each week. Otherwise we can see that the responses overlap strongly. We can assume a pattern where the bprs values decrease accross time for both groups. It also seems that there is a small increase of the bprs values during the last week but we cannot yet say if there has been that kind of an inrease or not. 
+
+
+```{r}
+ggplot(BPRSL, aes(x = week, y = bprs)) + geom_text(aes(label = treatment)) + scale_x_continuous(name = "Time (days)") + scale_y_continuous(name = "BPRS") + theme(legend.position = "top")
+```
+
+When analysing the individual response profiles by treatment group, we do not see anything relevant from the data. The groups to not seem very different, except the same observation that could be seen in the previous plot (the individuals who point out with the highest values belong to the Group 2 almost each week). 
+
+```{r}
+ggplot(BPRSL, aes(x = week, y = bprs, linetype = subject)) +
+  geom_line() +
+  scale_linetype_manual(values = rep(1:10, times=4)) +
+  facet_grid(. ~ treatment, labeller = label_both) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(min(BPRSL$bprs), max(BPRSL$bprs)))
+```
+
+Now we analyse the differences of the groups by building a linear regression model. I build a model with week, treatment, and week*treatment as explaining variables. Only week turned out statistically significant. According to these results, we can hypothesise that the effect of treatments did not differ from each other. 
+
+```{r}
+# building a linear regression model
+BPRS_model <- lm(data = BPRSL, bprs ~ week + treatment + week*treatment)
+summary(BPRS_model)
+```
+
+Now we will take a look at a more appropriate model for this kind of data, the Random Intercept Model. 
+In the model we first use week and treatment as fixed-effect terms and (1 | subject) as a term implicating random-effect.
+
+```{r}
+BPRS_ref <- lmer(bprs ~ week + treatment + (1 | subject), data = BPRSL, REML = FALSE)
+summary(BPRS_ref)
+```
+
+
+Next we use week and treatment as fixed-effect terms and (week | subject) as the random-effect term. 
+
+
+```{r}
+BPRS_ref1 <- lmer(bprs ~ week + treatment + (week | subject), data = BPRSL, REML = FALSE)
+summary(BPRS_ref1)
+```
+
+When performing ANOVA between the two models, we can see from the results (chi-squared and p-value) that the random intercept and random slope model performs better and has a higher significance with lower values.
+
+```{r}
+anova(BPRS_ref1, BPRS_ref)
+```
+
+
+
+
+
+
+
